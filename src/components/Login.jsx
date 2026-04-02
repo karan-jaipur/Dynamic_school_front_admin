@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Base_Url } from "../config";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -6,7 +7,7 @@ const Login = () => {
 
   const handleLogin = async () => {
     try {
-      const res = await fetch("https://karanschool.duckdns.org/api/auth/login", {
+      const res = await fetch(`${Base_Url}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -1,133 +1,174 @@
 /* eslint-disable no-unused-vars */
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Plus, Edit2, Trash2, Upload, X, FolderPlus, Image as ImageIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import React, { useState } from "react";
+import { motion } from "framer-motion";
+import {
+  Plus,
+  Edit2,
+  Trash2,
+  Upload,
+  X,
+  FolderPlus,
+  Image as ImageIcon,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   listGalleries,
   listGalleryCategories,
   createGalleryImage,
   updateGallery,
   deleteGallery,
-} from '@/api/adminClient';
+  createGalleryCategory
+} from "@/api/adminClient";
 
 export default function AdminGallery() {
-  const [activeTab, setActiveTab] = useState('images');
+  const [activeTab, setActiveTab] = useState("images");
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [editingImage, setEditingImage] = useState(null);
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState("all");
   const [uploading, setUploading] = useState(false);
   const [imageFile, setImageFile] = useState(null);
-
+const [categoryName, setCategoryName] = useState("");
   const [imageForm, setImageForm] = useState({
-    title: '',
-    image_url: '',
-    category: '',
-    description: '',
+    title: "",
+    image_url: "",
+    category: "",
+    description: "",
     is_featured: false,
     order: 0,
   });
 
   const [categoryForm, setCategoryForm] = useState({
-    name: '',
-    slug: '',
-    cover_image: '',
+    name: "",
+    slug: "",
+    cover_image: "",
     order: 0,
   });
 
   const queryClient = useQueryClient();
 
   const { data: images = [] } = useQuery({
-    queryKey: ['galleryImages'],
+    queryKey: ["galleryImages"],
     queryFn: () => listGalleries(),
   });
 
-  const { data: categories = [] } = useQuery({
-    queryKey: ['galleryCategories'],
-    queryFn: () => listGalleryCategories(),
-  });
+ const { data: categories = [] } = useQuery({
+  queryKey: ["galleryCategories"],
+  queryFn: listGalleryCategories,
+  staleTime: 1000 * 60 * 5,
+  refetchOnWindowFocus: false,
+});
 
   const createImageMutation = useMutation({
     mutationFn: (data) => createGalleryImage(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['galleryImages'] });
+      queryClient.invalidateQueries({ queryKey: ["galleryImages"] });
       closeImageModal();
     },
   });
 
   const updateImageMutation = useMutation({
     mutationFn: ({ id, data }) => {
-      const galleryId = id.includes('-') ? id.split('-')[0] : id;
+      const galleryId = id.includes("-") ? id.split("-")[0] : id;
       return updateGallery(galleryId, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['galleryImages'] });
+      queryClient.invalidateQueries({ queryKey: ["galleryImages"] });
       closeImageModal();
     },
   });
 
   const deleteImageMutation = useMutation({
     mutationFn: (id) => {
-      const galleryId = id.includes('-') ? id.split('-')[0] : id;
+      const galleryId = id.includes("-") ? id.split("-")[0] : id;
       return deleteGallery(galleryId);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['galleryImages'] }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["galleryImages"] }),
   });
 
-  const createCategoryMutation = useMutation({
-    mutationFn: () => Promise.resolve(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['galleryCategories'] });
-      setIsCategoryModalOpen(false);
-      setCategoryForm({ name: '', slug: '', cover_image: '', order: 0 });
-    },
-  });
+const createCategoryMutation = useMutation({
+  mutationFn: createGalleryCategory,
+  onSuccess: () => {
+    queryClient.invalidateQueries(['galleryCategories']);
+
+    setCategoryForm({ name: "", slug: "" }); // clear form
+    setIsCategoryModalOpen(false); // close modal
+  },
+});
+
 
   const deleteCategoryMutation = useMutation({
     mutationFn: () => Promise.resolve(),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['galleryCategories'] }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["galleryCategories"] }),
   });
 
-  const openImageModal = (image = null) => {
-    if (image) {
-      setEditingImage(image);
-      setImageForm(image);
-    } else {
-      setEditingImage(null);
-      setImageForm({
-        title: '',
-        image_url: '',
-        category: categories[0]?.slug || '',
-        description: '',
-        is_featured: false,
-        order: images.length,
-      });
-    }
-    setIsImageModalOpen(true);
-  };
+const openImageModal = () => {
+  setImageForm({
+    image_url: "",
+    title: "",
+    category:
+      selectedCategory !== "all"
+        ? selectedCategory
+        : categories[0]?.slug || "",
+    is_featured: false,
+  });
+
+  setIsImageModalOpen(true);
+};
 
   const closeImageModal = () => {
     setIsImageModalOpen(false);
     setEditingImage(null);
   };
 
-  const handleImageUpload = async (e, isCategory = false) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setImageFile(file);
-    if (!isCategory) {
-      const url = URL.createObjectURL(file);
-      setImageForm(prev => ({ ...prev, image_url: url }));
-    }
-  };
+const handleImageUpload = (e) => {
+  const file = e.target.files[0];
+
+  if (!file) return;
+
+  // ✅ 1. File size validation (IMPORTANT)
+  const maxSize = 5 * 1024 * 1024; // 5MB
+
+  if (file.size > maxSize) {
+    alert("Image too large! Max size is 5MB.");
+    return;
+  }
+
+  // ✅ 2. File type validation (optional but good)
+  if (!file.type.startsWith("image/")) {
+    alert("Only image files are allowed");
+    return;
+  }
+
+  // ✅ 3. Preview
+  const imageUrl = URL.createObjectURL(file);
+
+  setImageForm((prev) => ({
+    ...prev,
+    image_url: imageUrl,
+    imageFile: file, // 🔥 important for upload
+  }));
+};
 
   const handleMultipleUpload = async (e) => {
     const files = Array.from(e.target.files || []);
@@ -136,12 +177,15 @@ export default function AdminGallery() {
     try {
       for (const file of files) {
         await createGalleryImage({
-          title: file.name.split('.')[0],
-          category: selectedCategory === 'all' ? (categories[0]?.slug || categories[0] || 'general') : selectedCategory,
+          title: file.name.split(".")[0],
+          category:
+            selectedCategory === "all"
+              ? categories[0]?.slug || categories[0] || "general"
+              : selectedCategory,
           imageFile: file,
         });
       }
-      queryClient.invalidateQueries({ queryKey: ['galleryImages'] });
+      queryClient.invalidateQueries({ queryKey: ["galleryImages"] });
     } finally {
       setUploading(false);
     }
@@ -157,17 +201,24 @@ export default function AdminGallery() {
     }
   };
 
-  const handleCategorySubmit = (e) => {
-    e.preventDefault();
-    createCategoryMutation.mutate({
-      ...categoryForm,
-      slug: categoryForm.slug || categoryForm.name.toLowerCase().replace(/\s+/g, '-'),
-    });
-  };
+const handleCategorySubmit = (e) => {
+  e.preventDefault();
 
-  const filteredImages = selectedCategory === 'all' 
-    ? images 
-    : images.filter(img => img.category === selectedCategory);
+  const name = categoryForm.name;
+
+  if (!name.trim()) return;
+
+  createCategoryMutation.mutate(name);
+};
+
+const normalize = (str) => str?.trim().toLowerCase();
+
+const filteredImages =
+  selectedCategory === "all"
+    ? images
+    : images.filter(
+        (img) => normalize(img.category) === normalize(selectedCategory)
+      );
 
   return (
     <div title="Gallery Management">
@@ -179,7 +230,7 @@ export default function AdminGallery() {
           </TabsList>
 
           <div className="flex gap-2">
-            {activeTab === 'images' ? (
+            {activeTab === "images" ? (
               <>
                 <label className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg cursor-pointer transition-colors">
                   <Upload className="w-4 h-4" />
@@ -193,13 +244,19 @@ export default function AdminGallery() {
                     disabled={uploading}
                   />
                 </label>
-                <Button onClick={() => openImageModal()} className="bg-[#1E3A8A] hover:bg-[#1E40AF]">
+                <Button
+                  onClick={() => openImageModal()}
+                  className="bg-[#1E3A8A] hover:bg-[#1E40AF]"
+                >
                   <Plus className="w-4 h-4 mr-2" />
                   Add Image
                 </Button>
               </>
             ) : (
-              <Button onClick={() => setIsCategoryModalOpen(true)} className="bg-[#1E3A8A] hover:bg-[#1E40AF]">
+              <Button
+                onClick={() => setIsCategoryModalOpen(true)}
+                className="bg-[#1E3A8A] hover:bg-[#1E40AF]"
+              >
                 <FolderPlus className="w-4 h-4 mr-2" />
                 Add Category
               </Button>
@@ -211,11 +268,11 @@ export default function AdminGallery() {
           {/* Category Filter */}
           <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
             <button
-              onClick={() => setSelectedCategory('all')}
+              onClick={() => setSelectedCategory("all")}
               className={`px-4 py-2 rounded-full whitespace-nowrap transition-colors ${
-                selectedCategory === 'all'
-                  ? 'bg-[#1E3A8A] text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                selectedCategory === "all"
+                  ? "bg-[#1E3A8A] text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
               All ({images.length})
@@ -223,14 +280,15 @@ export default function AdminGallery() {
             {categories.map((cat) => (
               <button
                 key={cat.id}
-                onClick={() => setSelectedCategory(cat.slug)}
+                onClick={() => setSelectedCategory(cat.slug.trim().toLowerCase())}
                 className={`px-4 py-2 rounded-full whitespace-nowrap transition-colors ${
                   selectedCategory === cat.slug
-                    ? 'bg-[#1E3A8A] text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? "bg-[#1E3A8A] text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
               >
-                {cat.name} ({images.filter(i => i.category === cat.slug).length})
+                {cat.name} (
+                {images.filter((i) => i.category === cat.slug).length})
               </button>
             ))}
           </div>
@@ -276,7 +334,9 @@ export default function AdminGallery() {
                   </span>
                 )}
                 <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient from-black/80 to-transparent">
-                  <p className="text-white text-sm font-medium truncate">{image.title}</p>
+                  <p className="text-white text-sm font-medium truncate">
+                    {image.title}
+                  </p>
                 </div>
               </motion.div>
             ))}
@@ -313,7 +373,9 @@ export default function AdminGallery() {
                   )}
                 </div>
                 <div className="p-4">
-                  <h3 className="font-semibold text-gray-900">{category.name}</h3>
+                  <h3 className="font-semibold text-gray-900">
+                    {category.name}
+                  </h3>
                   <p className="text-sm text-gray-500">/{category.slug}</p>
                 </div>
                 <button
@@ -330,7 +392,10 @@ export default function AdminGallery() {
             <div className="text-center py-12 bg-gray-50 rounded-xl">
               <FolderPlus className="w-12 h-12 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-500 mb-4">No categories yet</p>
-              <Button onClick={() => setIsCategoryModalOpen(true)} variant="outline">
+              <Button
+                onClick={() => setIsCategoryModalOpen(true)}
+                variant="outline"
+              >
                 Create Your First Category
               </Button>
             </div>
@@ -342,7 +407,9 @@ export default function AdminGallery() {
       <Dialog open={isImageModalOpen} onOpenChange={setIsImageModalOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingImage ? 'Edit Image' : 'Add New Image'}</DialogTitle>
+            <DialogTitle>
+              {editingImage ? "Edit Image" : "Add New Image"}
+            </DialogTitle>
           </DialogHeader>
 
           <form onSubmit={handleImageSubmit} className="space-y-4">
@@ -350,10 +417,16 @@ export default function AdminGallery() {
               <Label>Image</Label>
               {imageForm.image_url ? (
                 <div className="relative mt-2 rounded-lg overflow-hidden">
-                  <img src={imageForm.image_url} alt="Preview" className="w-full h-48 object-cover" />
+                  <img
+                    src={imageForm.image_url}
+                    alt="Preview"
+                    className="w-full h-48 object-cover"
+                  />
                   <button
                     type="button"
-                    onClick={() => setImageForm(prev => ({ ...prev, image_url: '' }))}
+                    onClick={() =>
+                      setImageForm((prev) => ({ ...prev, image_url: "" }))
+                    }
                     className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full"
                   >
                     <X className="w-4 h-4" />
@@ -363,7 +436,12 @@ export default function AdminGallery() {
                 <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-[#1E3A8A] mt-2">
                   <Upload className="w-8 h-8 text-gray-400 mb-2" />
                   <span className="text-sm text-gray-500">Click to upload</span>
-                  <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e)} />
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*"
+                    onChange={(e) => handleImageUpload(e)}
+                  />
                 </label>
               )}
             </div>
@@ -372,7 +450,9 @@ export default function AdminGallery() {
               <Label>Title</Label>
               <Input
                 value={imageForm.title}
-                onChange={(e) => setImageForm(prev => ({ ...prev, title: e.target.value }))}
+                onChange={(e) =>
+                  setImageForm((prev) => ({ ...prev, title: e.target.value }))
+                }
                 placeholder="Image title"
                 className="mt-1"
               />
@@ -382,14 +462,18 @@ export default function AdminGallery() {
               <Label>Category</Label>
               <Select
                 value={imageForm.category}
-                onValueChange={(v) => setImageForm(prev => ({ ...prev, category: v }))}
+                onValueChange={(v) =>
+                  setImageForm((prev) => ({ ...prev, category: v }))
+                }
               >
                 <SelectTrigger className="mt-1">
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
                   {categories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.slug}>{cat.name}</SelectItem>
+                    <SelectItem key={cat.id} value={cat.slug}>
+                      {cat.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -399,14 +483,18 @@ export default function AdminGallery() {
               <Label>Featured</Label>
               <Switch
                 checked={imageForm.is_featured}
-                onCheckedChange={(checked) => setImageForm(prev => ({ ...prev, is_featured: checked }))}
+                onCheckedChange={(checked) =>
+                  setImageForm((prev) => ({ ...prev, is_featured: checked }))
+                }
               />
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t">
-              <Button type="button" variant="outline" onClick={closeImageModal}>Cancel</Button>
+              <Button type="button" variant="outline" onClick={closeImageModal}>
+                Cancel
+              </Button>
               <Button type="submit" className="bg-[#1E3A8A] hover:bg-[#1E40AF]">
-                {editingImage ? 'Update' : 'Add'} Image
+                {editingImage ? "Update" : "Add"} Image
               </Button>
             </div>
           </form>
@@ -414,44 +502,57 @@ export default function AdminGallery() {
       </Dialog>
 
       {/* Category Modal */}
-      <Dialog open={isCategoryModalOpen} onOpenChange={setIsCategoryModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add Category</DialogTitle>
-          </DialogHeader>
+     <Dialog open={isCategoryModalOpen} onOpenChange={setIsCategoryModalOpen}>
+  <DialogContent className="max-w-md">
+    <DialogHeader>
+      <DialogTitle>Add Category</DialogTitle>
+    </DialogHeader>
 
-          <form onSubmit={handleCategorySubmit} className="space-y-4">
-            <div>
-              <Label>Category Name</Label>
-              <Input
-                value={categoryForm.name}
-                onChange={(e) => setCategoryForm(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="e.g., Annual Function"
-                className="mt-1"
-              />
-            </div>
+    {/* ✅ FORM SUBMIT HANDLE */}
+    <form onSubmit={handleCategorySubmit} className="space-y-4">
+      
+      <div>
+        <Label>Category Name</Label>
+        <Input
+          value={categoryForm.name}
+          onChange={(e) =>
+            setCategoryForm((prev) => ({ ...prev, name: e.target.value }))
+          }
+          placeholder="e.g., Annual Function"
+          className="mt-1"
+        />
+      </div>
 
-            <div>
-              <Label>Slug (optional)</Label>
-              <Input
-                value={categoryForm.slug}
-                onChange={(e) => setCategoryForm(prev => ({ ...prev, slug: e.target.value }))}
-                placeholder="auto-generated from name"
-                className="mt-1"
-              />
-            </div>
+      <div>
+        <Label>Slug (optional)</Label>
+        <Input
+          value={categoryForm.slug}
+          onChange={(e) =>
+            setCategoryForm((prev) => ({ ...prev, slug: e.target.value }))
+          }
+          placeholder="auto-generated from name"
+          className="mt-1"
+        />
+      </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t">
-              <Button type="button" variant="outline" onClick={() => setIsCategoryModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" className="bg-[#1E3A8A] hover:bg-[#1E40AF]">
-                Create Category
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <div className="flex justify-end gap-3 pt-4 border-t">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setIsCategoryModalOpen(false)}
+        >
+          Cancel
+        </Button>
+
+        {/* ✅ FIXED BUTTON */}
+        <Button type="submit">
+          Create Category
+        </Button>
+      </div>
+
+    </form>
+  </DialogContent>
+</Dialog>
     </div>
   );
 }

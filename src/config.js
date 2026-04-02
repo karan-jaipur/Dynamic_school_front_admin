@@ -1,8 +1,5 @@
-// Base URL for the Node/Express backend in `school_back/school_site`
-// The backend mounts all APIs under `/api` (see `index.js`).
-// Example: GET http://localhost:3000/api/admissions
-export const Base_Url = 'https://karanschool.duckdns.org/api';
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:3000';
 
-// If you later serve uploaded images from a different host/path,
-// update this value accordingly.
-export const Image_Url = 'https://karanschool.duckdns.org/uploads/';
+// Local backend is used by default so admin and user panel read the same CMS data during development.
+export const Base_Url = `${API_ORIGIN.replace(/\/$/, '')}/api`;
+export const Image_Url = `${API_ORIGIN.replace(/\/$/, '')}/uploads/`;
