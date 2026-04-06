@@ -60,7 +60,8 @@ export default function Notices() {
     },
   ];
 
-  const displayNotices = notices.length > 0 ? notices : defaultNotices;
+  const liveNotices = notices.filter((notice) => notice.is_published !== false);
+  const displayNotices = liveNotices.length > 0 ? liveNotices : defaultNotices;
 
   const filteredNotices = displayNotices.filter(notice =>
     notice.title.toLowerCase().includes(searchQuery.toLowerCase()) ||

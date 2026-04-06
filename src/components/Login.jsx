@@ -24,7 +24,7 @@ const Login = () => {
         alert("Login successful ✅");
 
         // redirect to dashboard
-        window.location.href = "/AdminDashboard";
+        window.location.href = "/home";
       } else {
         alert(data.message);
       }

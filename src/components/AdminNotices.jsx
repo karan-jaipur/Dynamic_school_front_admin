@@ -71,6 +71,8 @@ export default function AdminNotices() {
         description: '',
         date: format(new Date(), 'yyyy-MM-dd'),
         is_highlighted: false,
+        is_published: true,
+        attachment_url: '',
       });
     }
     setIsModalOpen(true);
@@ -93,14 +95,28 @@ export default function AdminNotices() {
   const toggleHighlight = async (notice) => {
     updateMutation.mutate({
       id: notice.id,
-      data: { ...notice, is_highlighted: !notice.is_highlighted },
+      data: {
+        title: notice.title,
+        description: notice.description || '',
+        date: notice.date ? format(new Date(notice.date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
+        is_highlighted: !notice.is_highlighted,
+        is_published: notice.is_published !== false,
+        attachment_url: notice.attachment_url || '',
+      },
     });
   };
 
   const togglePublish = async (notice) => {
     updateMutation.mutate({
       id: notice.id,
-      data: { ...notice, is_published: !notice.is_published },
+      data: {
+        title: notice.title,
+        description: notice.description || '',
+        date: notice.date ? format(new Date(notice.date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
+        is_highlighted: notice.is_highlighted === true,
+        is_published: !notice.is_published,
+        attachment_url: notice.attachment_url || '',
+      },
     });
   };
 
