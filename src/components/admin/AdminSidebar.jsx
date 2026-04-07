@@ -15,6 +15,15 @@ import {
   Users,
 } from "lucide-react";
 
+function getWebsiteUrl() {
+  if (typeof window === "undefined") return "/";
+  const { protocol, hostname, port, origin } = window.location;
+  if (hostname === "localhost" && port === "5174") {
+    return `${protocol}//${hostname}:5173/`;
+  }
+  return `${origin.replace(":5174", ":5173").replace(/\/$/, "")}/`;
+}
+
 function GroupLabel({ children, isCollapsed }) {
   if (isCollapsed) return null;
   return (
@@ -74,6 +83,10 @@ export default function AdminSidebar({
       return location.pathname === "/page-builder" || location.pathname.startsWith("/page-builder/");
     }
     return location.pathname === path;
+  };
+
+  const handleViewWebsite = () => {
+    window.open(getWebsiteUrl(), "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -143,7 +156,10 @@ export default function AdminSidebar({
       </div>
 
       <div className="border-t border-white/10 px-4 py-4">
-        <button className="mb-2 flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm text-white/72 transition hover:bg-white/6 hover:text-white">
+        <button
+          onClick={handleViewWebsite}
+          className="mb-2 flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm text-white/72 transition hover:bg-white/6 hover:text-white"
+        >
           <Eye className="h-4.5 w-4.5 text-white/55" />
           {!isCollapsed && <span>View Website</span>}
         </button>

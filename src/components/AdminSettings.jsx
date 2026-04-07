@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getSettings, updateSettings } from "@/api/adminClient";
+import { getSettings, listGalleries, updateSettings } from "@/api/adminClient";
 
 const tabs = [
   { key: "general", label: "General", icon: Globe },
@@ -64,13 +64,19 @@ export default function AdminSettings() {
   const [saving, setSaving] = useState(false);
   const [logoFile, setLogoFile] = useState(null);
   const [faviconFile, setFaviconFile] = useState(null);
+  const [principalPhotoFile, setPrincipalPhotoFile] = useState(null);
   const [saveMessage, setSaveMessage] = useState("");
   const [saveError, setSaveError] = useState("");
+  const [isPrincipalLibraryOpen, setIsPrincipalLibraryOpen] = useState(false);
 
   const queryClient = useQueryClient();
   const { data: savedSettings } = useQuery({
     queryKey: ["siteSettings"],
     queryFn: getSettings,
+  });
+  const { data: mediaImages = [] } = useQuery({
+    queryKey: ["galleryImages"],
+    queryFn: listGalleries,
   });
 
   useEffect(() => {
@@ -78,11 +84,12 @@ export default function AdminSettings() {
       setSettings(savedSettings);
       setLogoFile(null);
       setFaviconFile(null);
+      setPrincipalPhotoFile(null);
     }
   }, [savedSettings]);
 
   const mutation = useMutation({
-    mutationFn: (data) => updateSettings(data, { logoFile, faviconFile }),
+    mutationFn: (data) => updateSettings(data, { logoFile, faviconFile, principalPhotoFile }),
     onSuccess: () => {
       setSaving(false);
       setSaveError("");
@@ -90,6 +97,7 @@ export default function AdminSettings() {
       queryClient.invalidateQueries({ queryKey: ["siteSettings"] });
       setLogoFile(null);
       setFaviconFile(null);
+      setPrincipalPhotoFile(null);
     },
     onError: (error) => {
       setSaving(false);
@@ -108,12 +116,14 @@ export default function AdminSettings() {
     const url = URL.createObjectURL(file);
     if (key === "logo") setLogoFile(file);
     if (key === "favicon") setFaviconFile(file);
+    if (key === "principal_photo") setPrincipalPhotoFile(file);
     updateField(key, url);
   };
 
   const clearImage = (key) => {
     if (key === "logo") setLogoFile(null);
     if (key === "favicon") setFaviconFile(null);
+    if (key === "principal_photo") setPrincipalPhotoFile(null);
     updateField(key, "");
   };
 
@@ -237,21 +247,65 @@ export default function AdminSettings() {
           <div className="space-y-6">
             <h3 className="text-xl font-semibold text-slate-900">Principal Details</h3>
             <Field label="Principal Name">
-              <TextInput placeholder="Dr. Rakesh Sharma" />
+              <TextInput
+                value={settings.principal_name || ""}
+                onChange={(e) => updateField("principal_name", e.target.value)}
+                placeholder="Dr. Rakesh Sharma"
+              />
             </Field>
             <Field label="Qualification">
-              <TextInput placeholder="Ph.D. in Education" />
+              <TextInput
+                value={settings.principal_qualification || ""}
+                onChange={(e) => updateField("principal_qualification", e.target.value)}
+                placeholder="Ph.D. in Education"
+              />
             </Field>
             <Field label="Principal Message">
-              <TextArea rows={4} placeholder="Education is the most powerful weapon..." />
+              <TextArea
+                rows={4}
+                value={settings.principal_message || ""}
+                onChange={(e) => updateField("principal_message", e.target.value)}
+                placeholder="Education is the most powerful weapon..."
+              />
             </Field>
             <Field label="Principal Photo">
               <div className="flex items-center gap-3">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400">
-                  <Upload className="h-5 w-5" />
-                </div>
-                <button className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700">Library</button>
-                <button className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700">Upload</button>
+                {settings.principal_photo ? (
+                  <div className="relative">
+                    <img
+                      src={settings.principal_photo}
+                      alt="Principal"
+                      className="h-16 w-16 rounded-2xl object-cover border border-slate-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => clearImage("principal_photo")}
+                      className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400">
+                    <Upload className="h-5 w-5" />
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsPrincipalLibraryOpen(true)}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700"
+                >
+                  Library
+                </button>
+                <label className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 cursor-pointer">
+                  Upload
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*"
+                    onChange={(e) => handleImageUpload("principal_photo", e)}
+                  />
+                </label>
               </div>
             </Field>
           </div>
@@ -403,6 +457,45 @@ export default function AdminSettings() {
         <Save className="h-4 w-4" />
         {saving ? "Saving..." : "Save All Settings"}
       </button>
+
+      {isPrincipalLibraryOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4">
+          <div className="max-h-[85vh] w-full max-w-5xl overflow-hidden rounded-[28px] bg-white shadow-[0_30px_80px_rgba(15,23,42,0.28)]">
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+              <h3 className="text-2xl font-bold text-slate-900">Choose Principal Photo</h3>
+              <button
+                type="button"
+                onClick={() => setIsPrincipalLibraryOpen(false)}
+                className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="grid max-h-[70vh] gap-4 overflow-y-auto p-6 md:grid-cols-3 xl:grid-cols-4">
+              {mediaImages.map((image) => (
+                <button
+                  key={image.id}
+                  type="button"
+                  onClick={() => {
+                    setPrincipalPhotoFile(null);
+                    updateField("principal_photo", image.image_url);
+                    setIsPrincipalLibraryOpen(false);
+                  }}
+                  className="overflow-hidden rounded-[22px] border border-slate-200 bg-slate-50 text-left transition hover:shadow-md"
+                >
+                  <div className="aspect-square overflow-hidden bg-slate-100">
+                    <img src={image.image_url} alt={image.title} className="h-full w-full object-cover" />
+                  </div>
+                  <div className="p-4">
+                    <p className="truncate font-semibold text-slate-900">{image.title || "Untitled"}</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">{image.category}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

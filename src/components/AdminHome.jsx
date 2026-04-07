@@ -8,8 +8,8 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { listPages } from "@/api/adminClient";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { deletePage, listPages, savePageContent } from "@/api/adminClient";
 
 function buildSectionLabel(section) {
   if (section.type === "hero") return section.title || "Hero Section";
@@ -19,40 +19,84 @@ function buildSectionLabel(section) {
   return "Section";
 }
 
+function getPreviewUrl(page) {
+  if (typeof window === "undefined") return "/";
+  const { protocol, hostname, port } = window.location;
+  const previewOrigin =
+    hostname === "localhost" && port === "5174"
+      ? `${protocol}//${hostname}:5173`
+      : window.location.origin.replace(":5174", ":5173");
+
+  if (page?.isHome) {
+    return `${previewOrigin}/`;
+  }
+
+  const slug = String(page?.slug || "").replace(/^\/+/, "");
+  return slug ? `${previewOrigin}/${slug}` : `${previewOrigin}/`;
+}
+
+const FIXED_PAGES = [
+  {
+    _id: "home",
+    title: "Home",
+    slug: "",
+    isHome: true,
+    isFixed: true,
+    description: "Homepage sections, stats, testimonials, and academic highlights.",
+    sections: [{ order: 1, type: "content", title: "About Our School", key: "about_intro" }],
+    editorRoute: "/home-editor",
+  },
+];
+
 export default function AdminHome() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [selectedPageId, setSelectedPageId] = useState("home");
   const { data: pages = [] } = useQuery({
     queryKey: ["pages"],
     queryFn: listPages,
+  });
+  const deletePageMutation = useMutation({
+    mutationFn: deletePage,
+    onSuccess: (_, deletedPageId) => {
+      queryClient.invalidateQueries({ queryKey: ["pages"] });
+      if (selectedPageId === deletedPageId) {
+        setSelectedPageId("home");
+      }
+    },
+  });
+  const deleteBlockMutation = useMutation({
+    mutationFn: ({ pageId, sections }) => savePageContent(pageId, sections),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pages"] });
+      if (selectedPage?._id) {
+        queryClient.invalidateQueries({ queryKey: ["page", selectedPage._id] });
+      }
+    },
   });
 
   const normalizedPages = useMemo(
     () =>
       pages.map((page) => ({
         ...page,
+        isFixed: false,
         sections: Array.isArray(page.sections) ? [...page.sections].sort((a, b) => a.order - b.order) : [],
       })),
     [pages]
   );
 
-  const selectedPage =
-    selectedPageId === "home"
-      ? {
-          _id: "home",
-          title: "Home Page",
-          slug: "home",
-          sections: [{ order: 1, type: "content", title: "About Our School", key: "about_intro" }],
-          isHome: true,
-        }
-      : normalizedPages.find((page) => page._id === selectedPageId) || normalizedPages[0];
+  const pageItems = useMemo(
+    () => [...FIXED_PAGES, ...normalizedPages],
+    [normalizedPages]
+  );
+
+  const selectedPage = pageItems.find((page) => page._id === selectedPageId) || pageItems[0];
 
   useEffect(() => {
-    if (selectedPageId === "home") return;
-    if (!selectedPage && normalizedPages.length > 0) {
-      setSelectedPageId(normalizedPages[0]._id);
+    if (!selectedPage && pageItems.length > 0) {
+      setSelectedPageId(pageItems[0]._id);
     }
-  }, [normalizedPages, selectedPage, selectedPageId]);
+  }, [pageItems, selectedPage]);
 
   useEffect(() => {
     window.dispatchEvent(
@@ -72,6 +116,41 @@ export default function AdminHome() {
         ...section,
         key: `${selectedPage.slug}_${section.type}_${index + 1}`,
       }));
+
+  const handleDeletePage = (page) => {
+    if (!page?._id || page.isFixed || deletePageMutation.isPending) return;
+    const shouldDelete = window.confirm(`Delete "${page.title}" page?`);
+    if (!shouldDelete) return;
+    deletePageMutation.mutate(page._id);
+  };
+
+  const handlePreviewPage = (page = selectedPage) => {
+    const previewUrl = getPreviewUrl(page);
+    window.open(previewUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const handleOpenEditor = (page = selectedPage) => {
+    if (!page) return;
+    if (page.editorRoute) {
+      navigate(page.editorRoute);
+      return;
+    }
+    if (page.isHome) {
+      navigate("/home-editor");
+      return;
+    }
+    if (page._id) {
+      navigate(`/page-builder/${page._id}`);
+    }
+  };
+
+  const handleDeleteBlock = (sectionIndex) => {
+    if (selectedPage?.isHome || !selectedPage?._id || deleteBlockMutation.isPending) return;
+    const shouldDelete = window.confirm("Delete this block from the page?");
+    if (!shouldDelete) return;
+    const nextSections = (selectedPage.sections || []).filter((_, index) => index !== sectionIndex);
+    deleteBlockMutation.mutate({ pageId: selectedPage._id, sections: nextSections });
+  };
 
   return (
     <div className="space-y-6">
@@ -95,33 +174,37 @@ export default function AdminHome() {
           </p>
 
           <div className="mt-4 space-y-1">
-            <button
-              onClick={() => setSelectedPageId("home")}
-              className={`flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm ${
-                selectedPageId === "home" ? "bg-[#eef4ff] text-[#1c4ed8]" : "text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <FileText className="h-4 w-4" />
-                <span className="font-medium">Home</span>
-              </div>
-              <span className="text-xs text-slate-400">1</span>
-            </button>
-
-            {normalizedPages.map((page) => (
-              <button
+            {pageItems.map((page) => (
+              <div
                 key={page._id}
-                onClick={() => setSelectedPageId(page._id)}
-                className={`flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm ${
+                className={`flex items-center gap-2 rounded-xl px-3 py-3 text-left text-sm ${
                   selectedPageId === page._id ? "bg-[#eef4ff] text-[#1c4ed8]" : "text-slate-700 hover:bg-slate-50"
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  <FileText className="h-4 w-4" />
-                  <span className="font-medium">{page.title}</span>
-                </div>
-                <span className="text-xs text-slate-400">{page.sections.length}</span>
-              </button>
+                <button
+                  onClick={() => setSelectedPageId(page._id)}
+                  className="flex min-w-0 flex-1 items-center justify-between"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <FileText className="h-4 w-4 flex-shrink-0" />
+                    <span className="truncate font-medium">{page.title}</span>
+                  </div>
+                  <span className="ml-3 text-xs text-slate-400">{page.sections?.length || 0}</span>
+                </button>
+                {!page.isFixed && (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleDeletePage(page);
+                    }}
+                    className="rounded-lg p-2 text-slate-300 transition hover:bg-white hover:text-rose-500"
+                    aria-label={`Delete ${page.title}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
             ))}
           </div>
 
@@ -146,20 +229,35 @@ export default function AdminHome() {
                 {selectedSections.length} blocks · Drag to reorder
               </p>
             </div>
-            <button
-              onClick={() => {
-                if (selectedPage?.isHome) navigate("/home-editor");
-                else if (selectedPage?._id) navigate(`/page-builder/${selectedPage._id}`);
-              }}
-              className="inline-flex items-center gap-2 rounded-xl bg-[#2563eb] px-4 py-3 text-sm font-semibold text-white shadow-sm"
-            >
-              <Plus className="h-4 w-4" />
-              Add Block
-            </button>
+            <div className="flex items-center gap-2">
+              {!selectedPage?.isFixed && !selectedPage?.isHome && selectedPage?._id && (
+                <button
+                  type="button"
+                  onClick={() => handleDeletePage(selectedPage)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-rose-200 px-4 py-3 text-sm font-semibold text-rose-600 transition hover:bg-rose-50"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete Page
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  handleOpenEditor(selectedPage);
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#2563eb] px-4 py-3 text-sm font-semibold text-white shadow-sm"
+              >
+                <Plus className="h-4 w-4" />
+                {selectedPage?.isFixed && !selectedPage?.isHome ? "Open Editor" : "Add Block"}
+              </button>
+            </div>
           </div>
 
           <div className="mt-5 space-y-3">
-            {selectedSections.length === 0 ? (
+            {selectedPage?.isFixed && !selectedPage?.isHome ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 px-6 py-10 text-center text-sm text-slate-500">
+                {selectedPage.description}
+              </div>
+            ) : selectedSections.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 px-6 py-10 text-center text-sm text-slate-500">
                 This page has no blocks yet.
               </div>
@@ -184,19 +282,25 @@ export default function AdminHome() {
                   <span className="rounded-full bg-[#ecfdf3] px-3 py-1 text-xs font-semibold text-[#22a15a]">
                     Live
                   </span>
-                  <button className="rounded-lg p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => handlePreviewPage(selectedPage)}
+                    className="rounded-lg p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-700"
+                  >
                     <Eye className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={() => {
-                      if (selectedPage?.isHome) navigate("/home-editor");
-                      else if (selectedPage?._id) navigate(`/page-builder/${selectedPage._id}`);
-                    }}
+                    onClick={() => handleOpenEditor(selectedPage)}
                     className="rounded-lg p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-700"
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
-                  <button className="rounded-lg p-2 text-slate-300 hover:bg-slate-50 hover:text-slate-500">
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteBlock(index)}
+                    disabled={selectedPage?.isHome}
+                    className="rounded-lg p-2 text-slate-300 hover:bg-slate-50 hover:text-slate-500 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
@@ -204,7 +308,7 @@ export default function AdminHome() {
             )}
           </div>
 
-          {!selectedPage?.isHome && selectedPage?._id && (
+          {!selectedPage?.isFixed && !selectedPage?.isHome && selectedPage?._id && (
             <div className="mt-5">
               <Link
                 to={`/page-builder/${selectedPage._id}`}

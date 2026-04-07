@@ -20,6 +20,7 @@ import {
 export default function AdminNotices() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingNotice, setEditingNotice] = useState(null);
+  const [attachmentFile, setAttachmentFile] = useState(null);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -58,6 +59,7 @@ export default function AdminNotices() {
   });
 
   const openModal = (notice = null) => {
+    setAttachmentFile(null);
     if (notice) {
       setEditingNotice(notice);
       setFormData({
@@ -81,14 +83,16 @@ export default function AdminNotices() {
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingNotice(null);
+    setAttachmentFile(null);
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    const payload = { ...formData, attachmentFile: attachmentFile || undefined };
     if (editingNotice) {
-      updateMutation.mutate({ id: editingNotice.id, data: formData });
+      updateMutation.mutate({ id: editingNotice.id, data: payload });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate(payload);
     }
   };
 
@@ -123,7 +127,9 @@ export default function AdminNotices() {
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // TODO: upload attachment to backend when endpoint is available
+    setAttachmentFile(file);
+    const previewUrl = URL.createObjectURL(file);
+    setFormData(prev => ({ ...prev, attachment_url: previewUrl }));
   };
 
   return (

@@ -55,9 +55,11 @@ function request(path, options = {}) {
 export function listPages() {
   return request("/pages").then((pages = []) =>
     pages.map((page) => ({
+      id: page._id,
       ...page,
       sections: Array.isArray(page.sections) ? page.sections : [],
       is_active: Boolean(page.is_active),
+      is_published: Boolean(page.is_active),
       order: Number(page.order || 1),
     }))
   );
@@ -65,9 +67,11 @@ export function listPages() {
 
 export function getPage(id) {
   return request(`/pages/${id}`).then((page) => ({
+    id: page._id,
     ...page,
     sections: Array.isArray(page.sections) ? page.sections : [],
     is_active: Boolean(page.is_active),
+    is_published: Boolean(page.is_active),
     order: Number(page.order || 1),
   }));
 }
@@ -75,14 +79,24 @@ export function getPage(id) {
 export function createPage(payload) {
   return request("/pages", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      title: payload.title,
+      slug: payload.slug,
+      is_active: payload.is_active ?? payload.is_published ?? true,
+      order: payload.order,
+    }),
   });
 }
 
 export function updatePage(id, payload) {
   return request(`/pages/${id}`, {
     method: "PUT",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      title: payload.title,
+      slug: payload.slug,
+      is_active: payload.is_active ?? payload.is_published,
+      order: payload.order,
+    }),
   });
 }
 
@@ -176,6 +190,10 @@ export async function getSettings() {
     accent_color: data.accentColor,
     text_color: data.textColor || "#0f172a",
     font_family: data.fontFamily || "Inter, system-ui, sans-serif",
+    principal_name: data.principalName || "",
+    principal_qualification: data.principalQualification || "",
+    principal_message: data.principalMessage || "",
+    principal_photo: data.principalPhoto || "",
     meta_title: data.seoTitle,
     meta_description: data.seoDescription,
     meta_keywords: data.metaKeywords || "",
@@ -198,10 +216,14 @@ export async function getSettings() {
 }
 
 export function updateSettings(settings, files = {}) {
-  const { logoFile = null, faviconFile = null } = files;
+  const { logoFile = null, faviconFile = null, principalPhotoFile = null } = files;
   const payload = {
     schoolName: settings.school_name,
     tagline: settings.tagline,
+    principalName: settings.principal_name,
+    principalQualification: settings.principal_qualification,
+    principalMessage: settings.principal_message,
+    principalPhoto: settings.principal_photo || "",
     phone: settings.phone,
     email: settings.email,
     address: settings.address,
@@ -225,7 +247,7 @@ export function updateSettings(settings, files = {}) {
     favicon: settings.favicon || "",
   };
 
-  if (!logoFile && !faviconFile) {
+  if (!logoFile && !faviconFile && !principalPhotoFile) {
     return apiPut("/settings", payload);
   }
 
@@ -235,6 +257,7 @@ export function updateSettings(settings, files = {}) {
   });
   if (logoFile) formData.append("logo", logoFile);
   if (faviconFile) formData.append("favicon", faviconFile);
+  if (principalPhotoFile) formData.append("principalPhoto", principalPhotoFile);
 
   return fetch(`${API_BASE}/settings`, {
     method: "PUT",
@@ -354,8 +377,8 @@ export async function listBanners() {
     image_url: item.image || "",
     cta_primary_text: item.buttonText || "Learn More",
     cta_primary_link: item.buttonLink || "#",
-    cta_secondary_text: "",
-    cta_secondary_link: "",
+    cta_secondary_text: item.secondaryButtonText || "",
+    cta_secondary_link: item.secondaryButtonLink || "",
     order: Number(item.order || 0),
     is_active: item.isActive !== false,
   }));
@@ -366,6 +389,8 @@ function appendBannerFormData(formData, form) {
   formData.append("subtitle", form.subtitle || "");
   formData.append("buttonText", form.cta_primary_text || "Learn More");
   formData.append("buttonLink", form.cta_primary_link || "#");
+  formData.append("secondaryButtonText", form.cta_secondary_text || "");
+  formData.append("secondaryButtonLink", form.cta_secondary_link || "");
   formData.append("order", String(Number(form.order || 0)));
   formData.append("isActive", String(form.is_active !== false));
 }
@@ -399,25 +424,61 @@ export function deleteBanner(id) {
 }
 
 export function createNotice(form) {
-  return apiPost("/notices", {
-    title: form.title,
-    description: form.description || "",
-    date: form.date,
-    isHighlighted: Boolean(form.is_highlighted),
-    isPublished: form.is_published !== false,
-    attachmentUrl: form.attachment_url || "",
-  });
+  if (!form.attachmentFile) {
+    return apiPost("/notices", {
+      title: form.title,
+      description: form.description || "",
+      date: form.date,
+      isHighlighted: Boolean(form.is_highlighted),
+      isPublished: form.is_published !== false,
+      attachmentUrl: form.attachment_url || "",
+    });
+  }
+
+  const formData = new FormData();
+  formData.append("title", form.title || "");
+  formData.append("description", form.description || "");
+  formData.append("date", form.date || "");
+  formData.append("isHighlighted", String(Boolean(form.is_highlighted)));
+  formData.append("isPublished", String(form.is_published !== false));
+  formData.append("attachmentUrl", form.attachment_url || "");
+  formData.append("attachment", form.attachmentFile);
+
+  return fetch(`${API_BASE}/notices`, {
+    method: "POST",
+    credentials: "include",
+    headers: buildAuthHeaders(),
+    body: formData,
+  }).then(handleResponse);
 }
 
 export function updateNotice(id, form) {
-  return apiPut(`/notices/${id}`, {
-    title: form.title,
-    description: form.description || "",
-    date: form.date,
-    isHighlighted: Boolean(form.is_highlighted),
-    isPublished: form.is_published !== false,
-    attachmentUrl: form.attachment_url || "",
-  });
+  if (!form.attachmentFile) {
+    return apiPut(`/notices/${id}`, {
+      title: form.title,
+      description: form.description || "",
+      date: form.date,
+      isHighlighted: Boolean(form.is_highlighted),
+      isPublished: form.is_published !== false,
+      attachmentUrl: form.attachment_url || "",
+    });
+  }
+
+  const formData = new FormData();
+  formData.append("title", form.title || "");
+  formData.append("description", form.description || "");
+  formData.append("date", form.date || "");
+  formData.append("isHighlighted", String(Boolean(form.is_highlighted)));
+  formData.append("isPublished", String(form.is_published !== false));
+  formData.append("attachmentUrl", form.attachment_url || "");
+  formData.append("attachment", form.attachmentFile);
+
+  return fetch(`${API_BASE}/notices/${id}`, {
+    method: "PUT",
+    credentials: "include",
+    headers: buildAuthHeaders(),
+    body: formData,
+  }).then(handleResponse);
 }
 
 export function deleteNotice(id) {
